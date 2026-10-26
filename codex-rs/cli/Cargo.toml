@@ -37,6 +37,8 @@ codex-app-server-daemon = { workspace = true }
 codex-app-server-protocol = { workspace = true }
 codex-app-server-test-client = { workspace = true }
 codex-arg0 = { workspace = true }
+codex-council = { workspace = true }
+codex-provider-limits = { workspace = true }
 codex-build-info = { workspace = true }
 codex-api = { workspace = true }
 codex-aws-auth = { workspace = true }

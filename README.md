@@ -9,6 +9,18 @@ If you want Codex in your code editor (VS Code, Cursor, Windsurf), <a href="http
 
 ---
 
+## This fork: multi-model council
+
+This fork adds a **council** mode where GPT, Claude, Kimi, DeepSeek and Grok work on one project with defined roles (planner, coders, reviewer, tester), running on your own subscriptions where the provider allows it. The status line shows usage left for every provider. See [docs/council.md](./docs/council.md).
+
+```shell
+codex council init     # write the council profile and role files
+codex council doctor   # check every member is installed and signed in
+codex council start    # start a council session
+```
+
+---
+
 ## Quickstart
 
 ### Installing and running Codex CLI

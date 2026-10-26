@@ -44,6 +44,7 @@ members = [
     "shell-command",
     "skills",
     "core",
+    "council",
     "core-api",
     "core-plugin-common",
     "core-plugins",
@@ -91,6 +92,7 @@ members = [
     "mermaid",
     "message-board",
     "model-provider-info",
+    "provider-limits",
     "mxc-sandbox",
     "models-manager",
     "network-proxy",
@@ -264,6 +266,8 @@ codex-memories-write = { path = "memories/write" }
 codex-mcp = { path = "codex-mcp" }
 codex-mcp-extension = { path = "ext/mcp" }
 codex-model-provider-info = { path = "model-provider-info" }
+codex-provider-limits = { path = "provider-limits" }
+codex-council = { path = "council" }
 codex-models-manager = { path = "models-manager" }
 codex-mxc-sandbox = { path = "mxc-sandbox" }
 codex-network-proxy = { path = "network-proxy" }
