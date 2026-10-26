@@ -54,6 +54,7 @@ static ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 mod app_cmd;
 mod cloud_config;
 mod config_override_args;
+mod council_cmd;
 mod daemon_install;
 mod daemon_telemetry;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -172,6 +173,9 @@ enum Subcommand {
 
     /// Manage Codex plugins.
     Plugin(PluginCli),
+
+    /// Run several models (GPT, Claude, Kimi, DeepSeek, Grok) as a council with roles.
+    Council(council_cmd::CouncilCommand),
 
     /// [experimental] Run the app server or related tooling.
     AppServer(AppServerCommand),
@@ -1210,6 +1214,14 @@ async fn cli_main(
             let loader_overrides =
                 loader_overrides_for_profile(interactive.config_profile_v2.as_ref())?;
             mcp_cli.run(loader_overrides).await?;
+        }
+        Some(Subcommand::Council(council_cli)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "council",
+            )?;
+            council_cmd::run(council_cli).await?;
         }
         Some(Subcommand::Plugin(plugin_cli)) => {
             reject_remote_mode_for_subcommand(
@@ -2371,6 +2383,7 @@ fn unsupported_subcommand_name_for_strict_config(
         Some(Subcommand::RemoteControl(remote_control)) => Some(remote_control.subcommand_name()),
         Some(Subcommand::Mcp(_)) => Some("mcp"),
         Some(Subcommand::Plugin(_)) => Some("plugin"),
+        Some(Subcommand::Council(_)) => Some("council"),
         Some(Subcommand::MigrateRollouts(_)) => Some("migrate-rollouts"),
         Some(Subcommand::MigrateNfsDb(_)) => Some("migrate-nfs-db"),
         #[cfg(any(target_os = "macos", target_os = "windows"))]

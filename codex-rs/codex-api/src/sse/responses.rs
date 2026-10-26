@@ -6,6 +6,7 @@ use crate::common::SafetyBufferingTreatment;
 use crate::error::ApiError;
 use crate::error::parse_terminal_provider_error;
 use crate::rate_limits::parse_all_rate_limits;
+use crate::rate_limits::parse_x_ratelimit_snapshot;
 use crate::safety_buffering::treatment_from_headers;
 use crate::telemetry::SseTelemetry;
 use codex_client::ByteStream;
@@ -41,7 +42,8 @@ pub fn spawn_response_stream(
     telemetry: Option<Arc<dyn SseTelemetry>>,
     turn_state: Option<Arc<OnceLock<String>>>,
 ) -> ResponseStream {
-    let rate_limit_snapshots = parse_all_rate_limits(&stream_response.headers);
+    let mut rate_limit_snapshots = parse_all_rate_limits(&stream_response.headers);
+    rate_limit_snapshots.extend(parse_x_ratelimit_snapshot(&stream_response.headers));
     let models_etag = stream_response
         .headers
         .get("X-Models-Etag")

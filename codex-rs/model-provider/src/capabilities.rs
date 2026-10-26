@@ -50,6 +50,10 @@ impl ProviderCapabilities {
             remote_compaction: overrides
                 .remote_compaction
                 .unwrap_or(defaults.remote_compaction),
+            web_search: overrides.web_search.unwrap_or(defaults.web_search),
+            image_generation: overrides
+                .image_generation
+                .unwrap_or(defaults.image_generation),
             ..defaults
         }
     }

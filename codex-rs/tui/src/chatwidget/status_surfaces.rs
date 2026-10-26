@@ -789,6 +789,7 @@ impl ChatWidget {
                 let label = limit_label_for_window(window.window_minutes, is_secondary);
                 self.status_line_limit_display(Some(window), &label)
             }
+            StatusLineItem::AllLimits => self.status_line_all_limits(),
             StatusLineItem::CodexVersion => Some(CODEX_CLI_VERSION.to_string()),
             StatusLineItem::ContextWindowSize => self
                 .status_line_context_window_size()
@@ -882,6 +883,7 @@ impl ChatWidget {
             StatusSurfacePreviewItem::ContextUsed => StatusLineItem::ContextUsed,
             StatusSurfacePreviewItem::FiveHourLimit => StatusLineItem::FiveHourLimit,
             StatusSurfacePreviewItem::WeeklyLimit => StatusLineItem::WeeklyLimit,
+            StatusSurfacePreviewItem::AllLimits => StatusLineItem::AllLimits,
             StatusSurfacePreviewItem::CodexVersion => StatusLineItem::CodexVersion,
             StatusSurfacePreviewItem::ContextWindowSize => StatusLineItem::ContextWindowSize,
             StatusSurfacePreviewItem::UsedTokens => StatusLineItem::UsedTokens,
@@ -1124,6 +1126,42 @@ impl ChatWidget {
         let mut truncated = head.graphemes(true).take(max_chars - 3).collect::<String>();
         truncated.push_str("...");
         truncated
+    }
+}
+
+impl ChatWidget {
+    /// GPT's own windows followed by every provider recorded in the shared limits store.
+    fn status_line_all_limits(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        if let Some(snapshot) = self.rate_limit_snapshots_by_limit_id.get("codex") {
+            let mut gauges: Vec<String> = Vec::new();
+            for (window, is_secondary) in [
+                five_hour_status_window(snapshot),
+                weekly_status_window(snapshot),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                let label = limit_label_for_window(window.window_minutes, is_secondary);
+                let left = (100.0f64 - window.used_percent).clamp(0.0f64, 100.0f64);
+                let gauge = format!("{label}:{left:.0}%");
+                if !gauges.contains(&gauge) {
+                    gauges.push(gauge);
+                }
+            }
+            if !gauges.is_empty() {
+                parts.push(format!("GPT {}", gauges.join(" ")));
+            }
+        }
+        let store =
+            codex_provider_limits::LimitsStore::for_codex_home(self.config.codex_home.as_path());
+        if let Some(summary) = codex_provider_limits::format_compact_summary(
+            &store.load_all(),
+            chrono::Utc::now().timestamp(),
+        ) {
+            parts.push(summary);
+        }
+        (!parts.is_empty()).then(|| parts.join(" │ "))
     }
 }
 

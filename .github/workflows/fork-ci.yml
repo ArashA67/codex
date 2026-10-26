@@ -1,0 +1,107 @@
+name: fork-ci
+
+# CI for forks of openai/codex. Upstream's workflows need OpenAI's private
+# runners and secrets, so forks skip them and run this on standard
+# GitHub-hosted runners instead.
+on:
+  pull_request: {}
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: fork-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: "0"
+  # Debug info roughly triples the target directory on a runner with limited disk.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    name: Format, lint and dependencies
+    if: github.repository != 'openai/codex'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: codex-rs
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci
+      - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99.1
+        with:
+          components: rustfmt, clippy
+      - uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2.62.49
+        with:
+          tool: cargo-shear@1.11.2
+      - name: cargo fmt
+        run: cargo fmt -- --config imports_granularity=Item --check
+      # Unused dependencies still fail; warnings are not denied because upstream
+      # carries an unlinked test file (core/tests/suite/scenarios_read_only_mcp.rs).
+      - name: cargo shear
+        run: cargo shear
+      - name: cargo clippy (council crates)
+        run: cargo clippy -p codex-provider-limits -p codex-council --all-targets -- -D warnings
+
+  tests:
+    name: Build and test
+    if: github.repository != 'openai/codex'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    defaults:
+      run:
+        working-directory: codex-rs
+    steps:
+      - name: Free disk space
+        working-directory: /
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci
+      - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99.1
+      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: fork-ci-cargo-${{ runner.os }}-${{ hashFiles('codex-rs/Cargo.lock') }}
+          restore-keys: fork-ci-cargo-${{ runner.os }}-
+      - name: Test providers, limits and council
+        run: >-
+          cargo test
+          -p codex-provider-limits
+          -p codex-council
+          -p codex-model-provider-info
+          -p codex-model-provider
+          -p codex-api
+      - name: Test TUI status line
+        run: cargo test -p codex-tui status_line
+      - name: Build the codex binary
+        run: cargo build -p codex-cli --bin codex
+      - name: Council smoke test
+        run: |
+          set -euo pipefail
+          codex="$CARGO_TARGET_DIR/debug/codex"
+          # Codex refuses an explicit CODEX_HOME that doesn't exist yet.
+          export CODEX_HOME="$RUNNER_TEMP/codex-home"
+          mkdir -p "$CODEX_HOME"
+          project="$RUNNER_TEMP/project"
+          mkdir -p "$project" && cd "$project" && git init -q .
+          "$codex" council init
+          test -f "$CODEX_HOME/council.config.toml"
+          test -f .codex/agents/council-coder.toml
+          line=$(echo '{"rate_limits":{"five_hour":{"used_percentage":42},"seven_day":{"used_percentage":19}}}' \
+            | "$codex" council claude-statusline)
+          test "$line" = "Claude 5h:58% wk:81% left"
+          summary=$("$codex" council limits)
+          echo "$summary"
+          [[ "$summary" == Claude* ]]

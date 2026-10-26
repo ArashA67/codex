@@ -15,6 +15,10 @@ pub struct ModelProviderCapabilities {
     pub external_web_access: Option<bool>,
     /// Remote context-compaction protocol; omission preserves provider defaults.
     pub remote_compaction: Option<RemoteCompactionSupport>,
+    /// Whether the provider accepts the hosted `web_search` tool.
+    pub web_search: Option<bool>,
+    /// Whether the provider accepts the hosted image-generation tool.
+    pub image_generation: Option<bool>,
 }
 
 /// Remote context-compaction protocols supported by a model provider.

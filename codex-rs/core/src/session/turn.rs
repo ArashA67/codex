@@ -3189,6 +3189,9 @@ async fn try_run_sampling_request(
                 sess.set_server_reasoning_included(included).await;
             }
             ResponseEvent::RateLimits(snapshot) => {
+                if crate::provider_limits::record_header_snapshot(&turn_context, &snapshot) {
+                    continue;
+                }
                 // Update internal state with latest rate limits, but defer sending until
                 // token usage is available to avoid duplicate TokenCount events.
                 sess.record_rate_limits_info(snapshot).await;
@@ -3209,6 +3212,7 @@ async fn try_run_sampling_request(
             } => {
                 response_completed = true;
                 request_token_usage = token_usage.clone();
+                crate::provider_limits::record_request_usage(&turn_context, token_usage.as_ref());
                 sess.services
                     .analytics_events_client
                     .track_code_mode_tool_call(

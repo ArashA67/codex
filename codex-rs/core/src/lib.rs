@@ -125,6 +125,7 @@ pub(crate) mod plugins;
 pub use plugins::plugins_manager_for_config;
 #[doc(hidden)]
 pub(crate) mod prompt_debug;
+mod provider_limits;
 #[doc(hidden)]
 pub use prompt_debug::build_prompt_input;
 pub(crate) mod mentions {

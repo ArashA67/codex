@@ -7,6 +7,7 @@ pub(crate) mod files;
 pub(crate) mod images;
 pub(crate) mod provider;
 pub(crate) mod rate_limits;
+pub use rate_limits::X_RATELIMIT_LIMIT_ID;
 pub(crate) mod requests;
 mod responses_headers;
 pub(crate) mod safety_buffering;
