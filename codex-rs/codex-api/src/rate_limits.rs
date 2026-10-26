@@ -50,6 +50,47 @@ pub fn parse_all_rate_limits(headers: &HeaderMap) -> Vec<RateLimitSnapshot> {
     snapshots
 }
 
+/// Limit id used for snapshots built from OpenAI-compatible `x-ratelimit-*` headers.
+///
+/// These snapshots describe third-party providers, so callers route them to the
+/// per-provider limits store instead of the ChatGPT account limit state.
+pub const X_RATELIMIT_LIMIT_ID: &str = "x_ratelimit";
+
+/// Parses `x-ratelimit-*` headers into a snapshot whose primary window is the
+/// request bucket and whose secondary window is the token bucket.
+pub fn parse_x_ratelimit_snapshot(headers: &HeaderMap) -> Option<RateLimitSnapshot> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() as i64)
+        .unwrap_or_default();
+    let gauges = codex_provider_limits::parse_x_ratelimit_headers(headers, now);
+    if gauges.is_empty() {
+        return None;
+    }
+    let window = |label: &str| {
+        gauges
+            .iter()
+            .find(|gauge| gauge.label == label)
+            .map(|gauge| RateLimitWindow {
+                used_percent: gauge.used_percent,
+                window_minutes: None,
+                resets_at: gauge.resets_at,
+            })
+    };
+    Some(RateLimitSnapshot {
+        limit_id: Some(X_RATELIMIT_LIMIT_ID.to_string()),
+        limit_name: None,
+        normal_model_slug: None,
+        primary: window("req"),
+        secondary: window("tok"),
+        credits: None,
+        individual_limit: None,
+        spend_control_reached: None,
+        plan_type: None,
+        rate_limit_reached_type: None,
+    })
+}
+
 /// Parses rate-limit headers for the provided limit id.
 ///
 /// `limit_id` should match the server-provided metered limit id (e.g. `codex`,
@@ -276,6 +317,31 @@ mod tests {
     use super::*;
     use http::HeaderValue;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn parse_x_ratelimit_snapshot_maps_request_and_token_buckets() {
+        let mut headers = HeaderMap::new();
+        for (name, value) in [
+            ("x-ratelimit-limit-requests", "200"),
+            ("x-ratelimit-remaining-requests", "150"),
+            ("x-ratelimit-limit-tokens", "1000"),
+            ("x-ratelimit-remaining-tokens", "100"),
+        ] {
+            headers.insert(name, HeaderValue::from_static(value));
+        }
+
+        let snapshot = parse_x_ratelimit_snapshot(&headers).expect("snapshot");
+        assert_eq!(snapshot.limit_id.as_deref(), Some(X_RATELIMIT_LIMIT_ID));
+        assert_eq!(
+            snapshot.primary.map(|window| window.used_percent),
+            Some(25.0)
+        );
+        assert_eq!(
+            snapshot.secondary.map(|window| window.used_percent),
+            Some(90.0)
+        );
+        assert_eq!(parse_x_ratelimit_snapshot(&HeaderMap::new()), None);
+    }
 
     #[test]
     fn parse_rate_limit_for_limit_defaults_to_codex_headers() {
