@@ -62,7 +62,7 @@ jobs:
   apply-translation:
     name: Update issue with English translation
     needs: translate-issue
-    if: ${{ needs.translate-issue.result == 'success' }}
+    if: ${{ github.repository == 'openai/codex' && (needs.translate-issue.result == 'success') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -100,7 +100,7 @@ jobs:
   normalize-duplicates-all:
     name: Normalize pass 1 output
     needs: gather-duplicates-all
-    if: ${{ needs.gather-duplicates-all.result == 'success' }}
+    if: ${{ github.repository == 'openai/codex' && (needs.gather-duplicates-all.result == 'success') }}
     runs-on: ubuntu-latest
     permissions: {}
     outputs:
@@ -156,7 +156,7 @@ jobs:
     name: Identify potential duplicates (open issues fallback)
     # Pass 1 Codex execution drops sudo on its runner, so run the fallback in a fresh job.
     needs: normalize-duplicates-all
-    if: ${{ needs.normalize-duplicates-all.result == 'success' && needs.normalize-duplicates-all.outputs.has_matches != 'true' }}
+    if: ${{ github.repository == 'openai/codex' && (needs.normalize-duplicates-all.result == 'success' && needs.normalize-duplicates-all.outputs.has_matches != 'true') }}
     runs-on: ubuntu-latest
     environment: issue-triage
     permissions:
@@ -244,7 +244,7 @@ jobs:
   normalize-duplicates-open:
     name: Normalize pass 2 output
     needs: gather-duplicates-open
-    if: ${{ needs.gather-duplicates-open.result == 'success' }}
+    if: ${{ github.repository == 'openai/codex' && (needs.gather-duplicates-open.result == 'success') }}
     runs-on: ubuntu-latest
     permissions: {}
     outputs:
@@ -301,7 +301,7 @@ jobs:
     needs:
       - normalize-duplicates-all
       - normalize-duplicates-open
-    if: ${{ always() && needs.normalize-duplicates-all.result == 'success' && (needs.normalize-duplicates-open.result == 'success' || needs.normalize-duplicates-open.result == 'skipped') }}
+    if: ${{ github.repository == 'openai/codex' && (always() && needs.normalize-duplicates-all.result == 'success' && (needs.normalize-duplicates-open.result == 'success' || needs.normalize-duplicates-open.result == 'skipped')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -355,7 +355,7 @@ jobs:
   comment-on-issue:
     name: Comment with potential duplicates
     needs: select-final
-    if: ${{ always() && needs.select-final.result == 'success' }}
+    if: ${{ github.repository == 'openai/codex' && (always() && needs.select-final.result == 'success') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
