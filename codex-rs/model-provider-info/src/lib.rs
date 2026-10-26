@@ -102,6 +102,15 @@ pub const AMAZON_BEDROCK_DEFAULT_BASE_URL: &str =
 const AMAZON_BEDROCK_MANTLE_CLIENT_AGENT_HEADER: &str = "x-amzn-mantle-client-agent";
 const AMAZON_BEDROCK_MANTLE_CLIENT_AGENT_VALUE: &str = "codex";
 const CHAT_WIRE_API_REMOVED_ERROR: &str = "`wire_api = \"chat\"` is no longer supported.\nHow to fix: set `wire_api = \"responses\"` in your provider config.\nMore info: https://github.com/openai/codex/discussions/7782";
+pub const KIMI_CODE_PROVIDER_ID: &str = "kimi-code";
+const KIMI_CODE_PROVIDER_NAME: &str = "Kimi Code";
+/// Overseas Kimi Code endpoint. Mainland China accounts use `https://api.kimi.com/coding/v1`.
+pub const KIMI_CODE_DEFAULT_BASE_URL: &str = "https://api.kimi.ai/coding/v1";
+const KIMI_CODE_ENV_KEY: &str = "KIMI_API_KEY";
+pub const DEEPSEEK_PROVIDER_ID: &str = "deepseek";
+const DEEPSEEK_PROVIDER_NAME: &str = "DeepSeek";
+pub const DEEPSEEK_DEFAULT_BASE_URL: &str = "https://api.deepseek.com";
+const DEEPSEEK_ENV_KEY: &str = "DEEPSEEK_API_KEY";
 pub const LEGACY_OLLAMA_CHAT_PROVIDER_ID: &str = "ollama-chat";
 pub const OLLAMA_CHAT_PROVIDER_REMOVED_ERROR: &str = "`ollama-chat` is no longer supported.\nHow to fix: replace `ollama-chat` with `ollama` in `model_provider`, `oss_provider`, or `--local-provider`.\nMore info: https://github.com/openai/codex/discussions/7782";
 
@@ -657,6 +666,49 @@ other non-default provider fields are not supported"
         }
     }
 
+    /// Kimi Code membership endpoint, which serves the Responses API directly.
+    pub fn create_kimi_code_provider() -> ModelProviderInfo {
+        Self::create_hosted_responses_provider(
+            KIMI_CODE_PROVIDER_NAME,
+            KIMI_CODE_DEFAULT_BASE_URL,
+            KIMI_CODE_ENV_KEY,
+            "Create a key in the Kimi Code console (requires a Kimi Code membership).",
+        )
+    }
+
+    /// DeepSeek's pay-as-you-go API. Its Responses endpoint serves `deepseek-v4-flash`.
+    pub fn create_deepseek_provider() -> ModelProviderInfo {
+        Self::create_hosted_responses_provider(
+            DEEPSEEK_PROVIDER_NAME,
+            DEEPSEEK_DEFAULT_BASE_URL,
+            DEEPSEEK_ENV_KEY,
+            "Create a key at https://platform.deepseek.com/api_keys.",
+        )
+    }
+
+    /// Third-party Responses-compatible provider that does not offer OpenAI's hosted tools.
+    fn create_hosted_responses_provider(
+        name: &str,
+        base_url: &str,
+        env_key: &str,
+        env_key_instructions: &str,
+    ) -> ModelProviderInfo {
+        ModelProviderInfo {
+            name: name.into(),
+            base_url: Some(base_url.into()),
+            env_key: Some(env_key.into()),
+            env_key_instructions: Some(env_key_instructions.into()),
+            wire_api: WireApi::Responses,
+            capabilities: Some(ModelProviderCapabilities {
+                external_web_access: Some(false),
+                remote_compaction: Some(RemoteCompactionSupport::Unsupported),
+                web_search: Some(false),
+                image_generation: Some(false),
+            }),
+            ..Default::default()
+        }
+    }
+
     pub fn is_openai(&self) -> bool {
         self.name == OPENAI_PROVIDER_NAME
     }
@@ -715,7 +767,8 @@ pub fn built_in_model_providers(
         P::create_amazon_bedrock_runtime_provider(/*aws*/ None);
     let gcp_provider = P::create_gcp_provider();
 
-    // Bundle OpenAI, supported cloud-hosted OpenAI backends, and local OSS providers.
+    // Bundle OpenAI, supported cloud-hosted OpenAI backends, subscription-friendly
+    // third-party presets, and local OSS providers.
     // Other compatible providers can be added through `model_providers` in config.toml.
     [
         (OPENAI_PROVIDER_ID, openai_provider),
@@ -725,6 +778,8 @@ pub fn built_in_model_providers(
             AMAZON_BEDROCK_RUNTIME_PROVIDER_ID,
             amazon_bedrock_runtime_provider,
         ),
+        (KIMI_CODE_PROVIDER_ID, P::create_kimi_code_provider()),
+        (DEEPSEEK_PROVIDER_ID, P::create_deepseek_provider()),
         (
             OLLAMA_OSS_PROVIDER_ID,
             create_oss_provider(DEFAULT_OLLAMA_PORT, WireApi::Responses),
@@ -802,6 +857,16 @@ pub fn merge_configured_model_providers(
                         .extend(http_headers_override);
                 }
             }
+        } else if matches!(key.as_str(), KIMI_CODE_PROVIDER_ID | DEEPSEEK_PROVIDER_ID) {
+            // Third-party presets are plain Responses providers, so a configured
+            // entry (for example the mainland China Kimi endpoint) replaces them.
+            // The preset's capability limits still apply unless the entry sets its own.
+            if provider.capabilities.is_none() {
+                provider.capabilities = model_providers
+                    .get(&key)
+                    .and_then(|built_in| built_in.capabilities);
+            }
+            model_providers.insert(key, provider);
         } else {
             model_providers.entry(key).or_insert(provider);
         }

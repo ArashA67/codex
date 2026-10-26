@@ -952,3 +952,70 @@ model_catalog_url = "https://gateway.example/codex/catalog?token=catalog-secret"
         "https://gateway.example/v1"
     );
 }
+
+#[test]
+fn test_built_in_third_party_presets() {
+    let providers = built_in_model_providers(/*openai_base_url*/ None);
+
+    let kimi = &providers[KIMI_CODE_PROVIDER_ID];
+    assert_eq!(kimi.base_url.as_deref(), Some(KIMI_CODE_DEFAULT_BASE_URL));
+    assert_eq!(kimi.env_key.as_deref(), Some("KIMI_API_KEY"));
+    assert_eq!(kimi.wire_api, WireApi::Responses);
+    assert!(!kimi.requires_openai_auth);
+
+    let deepseek = &providers[DEEPSEEK_PROVIDER_ID];
+    assert_eq!(
+        deepseek.base_url.as_deref(),
+        Some(DEEPSEEK_DEFAULT_BASE_URL)
+    );
+    assert_eq!(deepseek.env_key.as_deref(), Some("DEEPSEEK_API_KEY"));
+    assert_eq!(
+        deepseek.capabilities,
+        Some(ModelProviderCapabilities {
+            external_web_access: Some(false),
+            remote_compaction: Some(RemoteCompactionSupport::Unsupported),
+            web_search: Some(false),
+            image_generation: Some(false),
+        })
+    );
+}
+
+#[test]
+fn test_configured_third_party_preset_replaces_built_in() {
+    let china_kimi = ModelProviderInfo {
+        base_url: Some("https://api.kimi.com/coding/v1".to_string()),
+        ..ModelProviderInfo::create_kimi_code_provider()
+    };
+    let providers = merge_configured_model_providers(
+        built_in_model_providers(/*openai_base_url*/ None),
+        HashMap::from([(KIMI_CODE_PROVIDER_ID.to_string(), china_kimi.clone())]),
+    )
+    .expect("merge succeeds");
+
+    assert_eq!(providers[KIMI_CODE_PROVIDER_ID], china_kimi);
+}
+
+#[test]
+fn test_configured_third_party_preset_keeps_preset_capabilities() {
+    let configured = ModelProviderInfo {
+        name: "Kimi Code".to_string(),
+        base_url: Some("https://api.kimi.com/coding/v1".to_string()),
+        env_key: Some("KIMI_API_KEY".to_string()),
+        ..Default::default()
+    };
+    let providers = merge_configured_model_providers(
+        built_in_model_providers(/*openai_base_url*/ None),
+        HashMap::from([(KIMI_CODE_PROVIDER_ID.to_string(), configured)]),
+    )
+    .expect("merge succeeds");
+
+    let kimi = &providers[KIMI_CODE_PROVIDER_ID];
+    assert_eq!(
+        kimi.base_url.as_deref(),
+        Some("https://api.kimi.com/coding/v1")
+    );
+    assert_eq!(
+        kimi.capabilities,
+        ModelProviderInfo::create_kimi_code_provider().capabilities
+    );
+}
