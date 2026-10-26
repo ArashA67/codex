@@ -91,12 +91,17 @@ jobs:
         run: |
           set -euo pipefail
           codex="$CARGO_TARGET_DIR/debug/codex"
+          # Codex refuses an explicit CODEX_HOME that doesn't exist yet.
           export CODEX_HOME="$RUNNER_TEMP/codex-home"
+          mkdir -p "$CODEX_HOME"
           project="$RUNNER_TEMP/project"
           mkdir -p "$project" && cd "$project" && git init -q .
           "$codex" council init
           test -f "$CODEX_HOME/council.config.toml"
           test -f .codex/agents/council-coder.toml
-          echo '{"rate_limits":{"five_hour":{"used_percentage":42},"seven_day":{"used_percentage":19}}}' \
-            | "$codex" council claude-statusline | grep -q "Claude 5h:58% wk:81% left"
-          "$codex" council limits | grep -q "Claude"
+          line=$(echo '{"rate_limits":{"five_hour":{"used_percentage":42},"seven_day":{"used_percentage":19}}}' \
+            | "$codex" council claude-statusline)
+          test "$line" = "Claude 5h:58% wk:81% left"
+          summary=$("$codex" council limits)
+          echo "$summary"
+          [[ "$summary" == Claude* ]]
